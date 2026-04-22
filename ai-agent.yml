@@ -1,0 +1,55 @@
+name: AI Agent (Aider)
+
+on:
+  issues:
+    types: [labeled] # Dispara quando você coloca uma etiqueta
+
+jobs:
+  aider-fix:
+    if: github.event.label.name == 'ai-fix' # Só roda se a etiqueta for 'ai-fix'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necessário para o Aider ver o histórico do git
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Instalar Aider
+        run: |
+          python -m pip install --upgrade pip
+          pip install aider-chat
+
+      - name: Configurar Git (para a IA poder fazer commit)
+        run: |
+          git config --global user.name "Aider AI"
+          git config --global user.email "aider@assistant.com"
+
+      - name: Executar Agente (Gemini)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # O comando abaixo pede para a IA resolver a issue e abrir um PR
+          aider --model gemini/gemini-1.5-pro \
+                --message "Resolva esta task baseada na descrição da Issue: ${{ github.event.issue.title }}. Descrição: ${{ github.event.issue.body }}" \
+                --yes \
+                --auto-test \
+                --no-git-rebase
+
+      - name: Criar Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "AI: Resolução automática da issue #${{ github.event.issue.number }}"
+          title: "🤖 Fix: ${{ github.event.issue.title }}"
+          body: "Este PR foi gerado automaticamente pelo Aider usando Gemini para resolver a issue #${{ github.event.issue.number }}."
+          branch: "ai-fix-${{ github.event.issue.number }}"
